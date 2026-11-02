@@ -5,7 +5,10 @@ const LIST_CAP = 150;
 const COLORS = ['#d9480f', '#7048e8', '#1c7ed6', '#2f9e44', '#c2255c', '#e8590c', '#0c8599', '#5c940d', '#862e9c'];
 
 const $ = (id) => document.getElementById(id);
-const state = { places: [], newIds: new Set(), cats: [], activeCats: new Set(), onlyNew: false, query: '', me: null };
+const state = {
+  places: [], visible: [], newIds: new Set(), cats: [], counts: {}, colors: {},
+  activeCats: new Set(), onlyNew: false, query: '', me: null,
+};
 
 // ---------- storage ----------
 function loadStore() {
@@ -25,6 +28,10 @@ function cleanDesc(html) {
   const doc = new DOMParser().parseFromString(withBreaks, 'text/html');
   return (doc.body.textContent || '').trim();
 }
+// Members flag closures in the name/notes ("Permanently Closed", "(closed)", or a note that's just "CLOSED").
+function isClosed(name, desc) {
+  return /permanently closed|closed permanently|\(closed\)/i.test(`${name} ${desc}`) || /^closed[.!]?$/i.test(desc);
+}
 function parseKml(text) {
   const xml = new DOMParser().parseFromString(text, 'application/xml');
   if (xml.querySelector('parsererror')) throw new Error("That file isn't valid KML.");
@@ -43,6 +50,7 @@ function parseKml(text) {
       if (!isFinite(lat) || !isFinite(lng)) continue;
       const name = pm.querySelector(':scope > name')?.textContent.trim() || '(unnamed)';
       const desc = cleanDesc(pm.querySelector(':scope > description')?.textContent);
+      if (isClosed(name, desc)) continue;
       const id = `${name.toLowerCase()}@${lat.toFixed(4)},${lng.toFixed(4)}`;
       places.push({ id, name, desc, cat, lat, lng });
     }
@@ -78,28 +86,24 @@ map.addLayer(cluster);
 let meMarker = null;
 const markers = new Map(); // id -> marker
 
-function colorFor(cat) { return COLORS[state.cats.indexOf(cat) % COLORS.length]; }
-
 function esc(s) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
-function links(p) {
-  const dir = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+const newBadge = (p) => (state.newIds.has(p.id) ? ' <span class="new">New</span>' : '');
+// Shared by the map popup and the list row: category, notes, and links.
+function detailsHtml(p) {
+  const dir = `https://maps.apple.com/?daddr=${p.lat},${p.lng}`;
   const gm = `https://www.google.com/maps/search/${encodeURIComponent(p.name)}/@${p.lat},${p.lng},17z`;
-  return `<a href="${dir}" target="_blank" rel="noopener">Directions</a><a href="${gm}" target="_blank" rel="noopener">Google Maps</a>`;
-}
-function popupHtml(p) {
-  return `<div class="pop"><b>${esc(p.name)}</b>${state.newIds.has(p.id) ? ' <span class="new">New</span>' : ''}
-    <div class="cat" style="color:${colorFor(p.cat)}">${esc(p.cat)}</div>
-    ${p.desc ? `<p>${esc(p.desc)}</p>` : ''}<div class="links">${links(p)}</div></div>`;
+  return `<div class="cat">${esc(p.cat)}</div>${p.desc ? `<p>${esc(p.desc)}</p>` : ''}
+    <div class="links"><a href="${dir}" target="_blank" rel="noopener">Directions</a><a href="${gm}" target="_blank" rel="noopener">Google Maps</a></div>`;
 }
 
 function buildMarkers() {
   markers.clear();
   for (const p of state.places) {
     const m = L.circleMarker([p.lat, p.lng], {
-      radius: 7, weight: 2, color: '#fff', fillColor: colorFor(p.cat), fillOpacity: 0.95,
-    }).bindPopup(() => popupHtml(p), { maxWidth: 280 });
+      radius: 7, weight: 2, color: '#fff', fillColor: state.colors[p.cat], fillOpacity: 0.95,
+    }).bindPopup(() => `<div class="pop"><b>${esc(p.name)}</b>${newBadge(p)}${detailsHtml(p)}</div>`, { maxWidth: 280 });
     markers.set(p.id, m);
   }
 }
@@ -116,17 +120,17 @@ function matches(p) {
 }
 
 function refreshMap() {
+  state.visible = state.places.filter(matches);
   cluster.clearLayers();
-  cluster.addLayers(state.places.filter(matches).map((p) => markers.get(p.id)));
+  cluster.addLayers(state.visible.map((p) => markers.get(p.id)));
   renderList();
 }
 
 function renderList() {
-  const filtered = state.places.filter(matches);
   // With a search or "New" filter, list every match; otherwise only what's in view.
   const global = !!state.query || state.onlyNew;
   const bounds = map.getBounds();
-  const pool = global ? filtered : filtered.filter((p) => bounds.contains([p.lat, p.lng]));
+  const pool = global ? state.visible : state.visible.filter((p) => bounds.contains([p.lat, p.lng]));
   const c = map.getCenter();
   const origin = state.me || { lat: c.lat, lng: c.lng };
   const rows = pool.map((p) => ({ p, d: distMi(origin, p) })).sort((a, b) => a.d - b.d);
@@ -135,24 +139,19 @@ function renderList() {
     ? `${rows.length} match${rows.length === 1 ? '' : 'es'}${state.me ? ' · nearest first' : ''}`
     : `${rows.length} in view${state.me ? ' · nearest to you first' : ''}${rows.length > LIST_CAP ? ` · showing ${LIST_CAP}` : ''}`;
 
-  const list = $('list');
-  list.innerHTML = rows.slice(0, LIST_CAP).map(({ p, d }) => `
+  $('list').innerHTML = rows.slice(0, LIST_CAP).map(({ p, d }) => `
     <li data-id="${esc(p.id)}">
-      <div class="row1"><span class="dot" style="background:${colorFor(p.cat)}"></span>
-        <b>${esc(p.name)}</b>${state.newIds.has(p.id) ? '<span class="new">New</span>' : ''}
+      <div class="row1"><span class="dot" style="background:${state.colors[p.cat]}"></span>
+        <b>${esc(p.name)}</b>${newBadge(p)}
         <span class="dist">${state.me || global ? fmtDist(d) : ''}</span></div>
-      <div class="cat">${esc(p.cat)}</div>
-      ${p.desc ? `<p>${esc(p.desc)}</p>` : ''}
-      <div class="links">${links(p)}</div>
+      ${detailsHtml(p)}
     </li>`).join('');
 }
 
 function renderChips() {
-  const counts = {};
-  for (const p of state.places) counts[p.cat] = (counts[p.cat] || 0) + 1;
   const chips = state.cats.map((cat) => `
-    <button class="chip ${state.activeCats.has(cat) ? 'on' : ''}" data-cat="${esc(cat)}" style="--c:${colorFor(cat)}">
-      ${esc(cat)} <small>${counts[cat]}</small></button>`);
+    <button class="chip ${state.activeCats.has(cat) ? 'on' : ''}" data-cat="${esc(cat)}" style="--c:${state.colors[cat]}">
+      ${esc(cat)} <small>${state.counts[cat]}</small></button>`);
   if (state.newIds.size) {
     chips.unshift(`<button class="chip new-chip ${state.onlyNew ? 'on' : ''}" data-new="1" style="--c:#f59f00">
       New <small>${state.newIds.size}</small></button>`);
@@ -164,9 +163,10 @@ function renderChips() {
 function setData(data) {
   state.places = data.places;
   state.newIds = new Set(data.newIds || []);
-  const counts = {};
-  for (const p of state.places) counts[p.cat] = (counts[p.cat] || 0) + 1;
-  state.cats = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  state.counts = {};
+  for (const p of state.places) state.counts[p.cat] = (state.counts[p.cat] || 0) + 1;
+  state.cats = Object.keys(state.counts).sort((a, b) => state.counts[b] - state.counts[a]);
+  state.colors = Object.fromEntries(state.cats.map((c, i) => [c, COLORS[i % COLORS.length]]));
   state.activeCats = new Set(state.cats);
   state.onlyNew = false;
   buildMarkers();
@@ -177,7 +177,6 @@ function setData(data) {
 }
 
 async function handleFile(file) {
-  const msg = $('emptyMsg');
   try {
     const places = parseKml(await file.text());
     const prev = loadStore();
@@ -186,16 +185,11 @@ async function handleFile(file) {
     const data = { loadedAt: Date.now(), places, newIds };
     if (!saveStore(data)) alert("Loaded, but this browser wouldn't save it, so you'll need to load the file again next time.");
     setData(data);
-    if (!prev) fitAll();
+    if (!prev) map.fitBounds(L.latLngBounds(places.map((p) => [p.lat, p.lng])), { padding: [20, 20] });
     toast(`${places.length} places loaded${prevIds ? ` · ${newIds.length} new` : ''}`);
   } catch (e) {
-    msg.textContent = e.message;
     alert(e.message);
   }
-}
-
-function fitAll() {
-  if (state.places.length) map.fitBounds(L.latLngBounds(state.places.map((p) => [p.lat, p.lng])), { padding: [20, 20] });
 }
 
 function toast(text) {
@@ -243,7 +237,7 @@ $('nearMe').onclick = () => {
     if (meMarker) meMarker.setLatLng(state.me);
     else meMarker = L.circleMarker(state.me, { radius: 8, color: '#fff', weight: 3, fillColor: '#228be6', fillOpacity: 1 }).addTo(map);
     // Frame you plus your 10 nearest (filtered) picks, so sparse areas still show something.
-    const nearest = state.places.filter(matches)
+    const nearest = state.visible
       .map((p) => ({ p, d: distMi(state.me, p) })).sort((a, b) => a.d - b.d).slice(0, 10);
     const pts = [[state.me.lat, state.me.lng], ...nearest.map(({ p }) => [p.lat, p.lng])];
     map.fitBounds(L.latLngBounds(pts), { padding: [30, 30], maxZoom: 15 });
