@@ -1,0 +1,6 @@
+*.kml
+*.kmz
+CLAUDE.md
+.claude.local.md
+.DS_Store
+.worktrees/

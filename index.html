@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CI Picks">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>CI Picks</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" integrity="sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <input id="search" type="search" placeholder="Search picks…" autocomplete="off">
+    <button id="nearMe" title="Near me">◎ Near me</button>
+    <button id="loadBtn" title="Load KML">⤓ KML</button>
+    <input id="file" type="file" hidden>
+  </header>
+  <nav id="chips"></nav>
+
+  <main data-sheet="half">
+    <div id="map"></div>
+    <section id="sheet">
+      <button id="handle" aria-label="Resize list"><span></span></button>
+      <div id="listMeta"></div>
+      <ol id="list"></ol>
+    </section>
+  </main>
+
+  <div id="empty" hidden>
+    <div class="card">
+      <h1>Cooking Issues Picks</h1>
+      <p>This page doesn't store any map data itself. You load it from Google onto this device, and you do it again whenever you want the latest picks.</p>
+      <ol>
+        <li>While signed in to Google, open
+          <a target="_blank" rel="noopener" href="https://www.google.com/maps/d/kml?forcekml=1&amp;mid=16g2lfFXxypXlUWefU82mDbjU3mJDZ2PA">the live KML download</a>.
+          On iPhone, save it to Files.
+          <span class="muted">(Getting a 403 or an empty file? Your Patreon Google account isn't your default one, so try
+          <a target="_blank" rel="noopener" href="https://www.google.com/maps/d/u/1/kml?forcekml=1&amp;mid=16g2lfFXxypXlUWefU82mDbjU3mJDZ2PA">2nd account</a> or
+          <a target="_blank" rel="noopener" href="https://www.google.com/maps/d/u/2/kml?forcekml=1&amp;mid=16g2lfFXxypXlUWefU82mDbjU3mJDZ2PA">3rd</a>.)</span></li>
+        <li>Tap <b>Load KML</b> below and pick that file.</li>
+        <li>Optional: Share → <b>Add to Home Screen</b>.</li>
+      </ol>
+      <button id="emptyLoad" class="primary">Load KML</button>
+      <p id="emptyMsg" class="muted"></p>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
+  <script src="app.js"></script>
+</body>
+</html>
